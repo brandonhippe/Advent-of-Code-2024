@@ -14,12 +14,13 @@ fn contiguous_area(plots: &HashMap<(i64, i64), char>, start_pos: (i64, i64)) -> 
             continue;
         }
 
-        let mut neighbors: HashSet<(i64, i64)> = HashSet::from_iter([(-1, 0), (1, 0), (0, -1), (0, 1)].iter().map(|(dx, dy)| (pos.0 + dx, pos.1 + dy)));
-        
-        for new_pos in neighbors.clone().iter() {
+        let mut neighbors: HashSet<(i64, i64)> = HashSet::new();
+        for neighbor_dir in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+            let new_pos = (pos.0 + neighbor_dir.0, pos.1 + neighbor_dir.1);
             if *plots.get(&new_pos).unwrap_or(&' ') == test_char {
-                checking.push_back(*new_pos);
-                neighbors.remove(new_pos);
+                checking.push_back(new_pos);
+            } else {
+                neighbors.insert(neighbor_dir);
             }
         }
 
@@ -58,13 +59,24 @@ fn part2(contents: String) -> i64 {
     let mut total_price: i64 = 0;
     while plots.len() > 0 {
         let area = contiguous_area(&plots, *plots.keys().next().unwrap());
-        let mut area_plots: HashMap<(i64, i64), char> = HashMap::from_iter(area.values().flat_map(|v| v.iter().map(|p| (*p, '0'))));
+        let mut side_directions: HashMap<(i64, i64), HashSet<(i64, i64)>> = HashMap::new();
+
+        for (pos, offset_directions) in area.iter() {
+            for offset in offset_directions.iter() {
+                side_directions.entry(*offset).or_insert(HashSet::new()).insert((pos.0 + offset.0, pos.1 + offset.1));
+            }
+        }
+
         let mut sides: i64 = 0;
         
-        while area_plots.len() > 0 {
-            let side = contiguous_area(&area_plots, *area_plots.keys().next().unwrap());
-            area_plots = HashMap::from_iter(area_plots.iter().filter_map(|(k, v)| if !side.contains_key(k) {Some((*k, *v))} else {None}));
-            sides += 1;
+        for outside in side_directions.values() {
+            let mut area_plots: HashMap<(i64, i64), char> = HashMap::from_iter(outside.iter().map(|k| (*k, '0')));
+
+            while area_plots.len() > 0 {
+                let side = contiguous_area(&area_plots, *area_plots.keys().next().unwrap());
+                area_plots = HashMap::from_iter(area_plots.iter().filter_map(|(k, v)| if !side.contains_key(k) {Some((*k, *v))} else {None}));
+                sides += 1;
+            }
         }
 
         total_price += sides * area.len() as i64;
@@ -144,7 +156,7 @@ fn main() {
 
     let part2_timer = Instant::now();
     println!(
-        "\nPart 2:\n {}\nRan in {:.5?}",
+        "\nPart 2:\nPrice: {}\nRan in {:.5?}",
         part2(contents.clone()),
         part2_timer.elapsed()
     );
