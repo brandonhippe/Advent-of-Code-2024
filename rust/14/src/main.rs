@@ -70,33 +70,34 @@ fn part2(contents: String, width: i64, height: i64) -> i64 {
     let mut min_y_t: i64 = -1;
 
     for t in 0..width.max(height) {
-        for mut robot in &mut robots {
-            robot.move_robot(width, height);
-        }
         let mean_x = robots.iter().map(|r| r.p_x as f64).sum::<f64>() / (robots.len() as f64);
         let mean_y = robots.iter().map(|r| r.p_y as f64).sum::<f64>() / (robots.len() as f64);
-        let var_x = robots.iter().map(|r| (r.p_x as f64 - mean_x).powf(2.0)).sum::<f64>() / (robots.len() as f64 - 1.0);
-        let var_y = robots.iter().map(|r| (r.p_y as f64 - mean_y).powf(2.0)).sum::<f64>() / (robots.len() as f64 - 1.0);
-
+        let var_x = robots.iter().map(|r| (r.p_x as f64 - mean_x).powf(2.0)).sum::<f64>() / (robots.len() as f64);
+        let var_y = robots.iter().map(|r| (r.p_y as f64 - mean_y).powf(2.0)).sum::<f64>() / (robots.len() as f64);
+        
         if var_x < min_x_var {
             min_x_var = var_x;
             min_x_t = t as i64;
         }
-
+        
         if var_y < min_y_var {
             min_y_var = var_y;
             min_y_t = t as i64;
         }
+
+        for mut robot in &mut robots {
+            robot.move_robot(width, height);
+        }
     }
 
-    // Chinese Remainder Theorem for the answer (add 1 for weird bug?)
+    // Chinese Remainder Theorem for the answer
     let n_s: Vec<i64> = vec![width, height];
     let big_n = n_s.iter().product::<i64>();
     let a_s: Vec<i64> = vec![min_x_t, min_y_t];
     let y_s: Vec<i64> = Vec::from_iter(n_s.iter().map(|n| big_n / n));
     let z_s: Vec<i64> = Vec::from_iter(zip(y_s.clone(), n_s.clone()).map(|(y, m)| mod_exp(y, m - 2, m)));
 
-    return 1 + (zip(a_s, zip(y_s, z_s)).map(|(a, (y, z))| a * y * z).sum::<i64>() + big_n) % big_n;
+    return zip(a_s, zip(y_s, z_s)).map(|(a, (y, z))| a * y * z).sum::<i64>() % big_n;
 }
 
 #[cfg(test)]
