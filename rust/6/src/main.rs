@@ -3,91 +3,114 @@ use std::env;
 use std::fs;
 use std::time::Instant;
 use std::collections::{HashMap, HashSet};
+use std::thread;
+use std::thread::available_parallelism;
 
-fn detect_loop(start_pos: (i64, i64, i64, i64), spaces: &HashMap<(i64, i64), bool>, already_visited: HashSet<(i64, i64, i64, i64)>) -> bool {
-    let mut visited: HashSet<(i64, i64, i64, i64)> = already_visited.clone();
-    let mut pos = start_pos;
-
-    while spaces.contains_key(&(pos.0, pos.1)) {
-        if visited.contains(&pos) {
-            return true;
-        }
-        visited.insert(pos);
-
-        pos = if *spaces.get(&(pos.0 + pos.2, pos.1 + pos.3)).unwrap_or(&true) {
-            (pos.0 + pos.2, pos.1 + pos.3, pos.2, pos.3)
-        } else {
-            (pos.0, pos.1, -pos.3, pos.2)
-        };
+fn guard_movement(pos: (i64, i64), facing: (i64, i64), spaces: &HashMap<(i64, i64), bool>, visited: &mut HashSet<((i64, i64), (i64, i64))>, add_obstacles: &mut HashSet<(i64, i64)>) -> ((i64, i64), (i64, i64), Option<bool>) {
+    if !spaces.contains_key(&pos) {
+        return (pos, facing, Some(false));
     }
 
-    return false;
+    if visited.contains(&(pos, facing)) {
+        return (pos, facing, Some(true));
+    }
+    visited.insert((pos, facing));
+
+    let forward: (i64, i64) = (pos.0 + facing.0, pos.1 + facing.1);
+    let right: (i64, i64) = (-facing.1, facing.0);
+    
+    return if *spaces.get(&forward).unwrap_or(&true) {
+        add_obstacles.insert(forward);
+        (forward, facing, None)
+    } else {
+        (pos, right, None)
+    };
 }
 
 fn part1(contents: String) -> i64 {
-    let mut start_pos: Option<(i64, i64)> = None;
+    let mut start_pos: Option<((i64, i64), (i64, i64))> = None;
     let mut spaces: HashMap<(i64, i64), bool> = HashMap::new();
     
     for (y, line) in contents.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             spaces.insert((x as i64, y as i64), c != '#');
-            if c == '^' {
-                start_pos = Some((x as i64, y as i64));
+            match c {
+                '^' => {start_pos = Some(((x as i64, y as i64), (0, -1)));},
+                'v' => {start_pos = Some(((x as i64, y as i64), (0, 1)));},
+                '>' => {start_pos = Some(((x as i64, y as i64), (1, 0)));},
+                '<' => {start_pos = Some(((x as i64, y as i64), (-1, 0)));},
+                _ => ()
             }
         }
     }
-    assert!(start_pos.is_some());
     
-    let mut visited: HashSet<(i64, i64)> = HashSet::new();
-    let mut pos = start_pos.unwrap();
-    let mut facing: (i64, i64) = (0, -1);
+    let mut visited: HashSet<((i64, i64), (i64, i64))> = HashSet::new();
+    let (mut pos, mut facing) = start_pos.unwrap();
+    let mut finished: Option<bool> = None;
 
-    while spaces.contains_key(&pos) {
-        visited.insert(pos);
-        if *spaces.get(&(pos.0 + facing.0, pos.1 + facing.1)).unwrap_or(&true) {
-            pos = (pos.0 + facing.0, pos.1 + facing.1);
-        } else {
-            facing = (-facing.1, facing.0);
-        }
+    while finished.is_none() {
+        (pos, facing, finished) = guard_movement(pos, facing, &spaces, &mut visited, &mut HashSet::new());
     }
-    return visited.len() as i64;
+
+    let actual_visited: HashSet<(i64, i64)> = HashSet::from_iter(
+        visited.iter().map(|(p, _f)| *p)
+    );
+    return actual_visited.len() as i64;
 }
 
 fn part2(contents: String) -> i64 {
-    let mut start_pos: Option<(i64, i64)> = None;
+    let mut start_pos: Option<((i64, i64), (i64, i64))> = None;
     let mut spaces: HashMap<(i64, i64), bool> = HashMap::new();
     
     for (y, line) in contents.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             spaces.insert((x as i64, y as i64), c != '#');
-            if c == '^' {
-                start_pos = Some((x as i64, y as i64));
+            match c {
+                '^' => {start_pos = Some(((x as i64, y as i64), (0, -1)));},
+                'v' => {start_pos = Some(((x as i64, y as i64), (0, 1)));},
+                '>' => {start_pos = Some(((x as i64, y as i64), (1, 0)));},
+                '<' => {start_pos = Some(((x as i64, y as i64), (-1, 0)));},
+                _ => ()
             }
         }
     }
-    assert!(start_pos.is_some());
     
-    let mut visited: HashSet<(i64, i64, i64, i64)> = HashSet::new();
-    let start = start_pos.unwrap();
-    let mut pos: (i64, i64, i64, i64) = (start.0, start.1, 0, -1);
+    let mut visited: HashSet<((i64, i64), (i64, i64))> = HashSet::new();
+    let (mut pos, mut facing) = start_pos.unwrap();
+    let mut finished: Option<bool> = None;
+    let mut check_obstacles: HashSet<(i64, i64)> = HashSet::new();
 
-    let mut count: HashSet<(i64, i64)> = HashSet::new();
-    while spaces.contains_key(&(pos.0, pos.1)) {
-        visited.insert(pos);
-
-        pos = if *spaces.get(&(pos.0 + pos.2, pos.1 + pos.3)).unwrap_or(&true) {
-            let mut test_spaces = spaces.clone();
-            test_spaces.insert((pos.0 + pos.2, pos.1 + pos.3), false);
-            if detect_loop((pos.0, pos.1, -pos.3, pos.2), &test_spaces, visited.clone()) {
-                count.insert((pos.0 + pos.2, pos.1 + pos.3));
-            }
-            (pos.0 + pos.2, pos.1 + pos.3, pos.2, pos.3)
-        } else {
-            (pos.0, pos.1, -pos.3, pos.2)
-        };
+    while finished.is_none() {
+        (pos, facing, finished) = guard_movement(pos, facing, &spaces, &mut visited, &mut check_obstacles);
     }
 
-    return count.len() as i64;
+    let num_cpus = available_parallelism().unwrap().get();
+    let num_per_thread = (check_obstacles.len() / num_cpus) + 1;
+    let threads: Vec<_> = (0..num_cpus).map(|n| {
+        let spaces = spaces.clone();
+        let check_obstacles = check_obstacles.clone();
+        let start_pos = start_pos.unwrap();
+        
+        thread::spawn(move || {
+            let mut count: i64 = 0;
+            for obstacle_pos in check_obstacles.iter().skip(n * num_per_thread).take(num_per_thread) {
+                let mut test_spaces = spaces.clone();
+                test_spaces.insert(*obstacle_pos, false);
+                let (mut test_pos, mut test_facing) = start_pos;
+                let mut test_finished = None;
+                let mut test_visited: HashSet<((i64, i64), (i64, i64))> = HashSet::new();
+                while test_finished.is_none() {
+                    (test_pos, test_facing, test_finished) = guard_movement(test_pos, test_facing, &test_spaces, &mut test_visited, &mut HashSet::new());
+                }
+        
+                count += test_finished.unwrap() as i64;
+            }
+
+            count
+        })
+    }).collect();
+
+    return threads.into_iter().map(|t| t.join().unwrap()).sum::<i64>();
 }
 
 #[cfg(test)]
@@ -138,7 +161,7 @@ fn main() {
 
     let part2_timer = Instant::now();
     println!(
-        "\nPart 2:\n {}\nRan in {:.5?}",
+        "\nPart 2:\nPositions to cause guard to loop: {}\nRan in {:.5?}",
         part2(contents.clone()),
         part2_timer.elapsed()
     );
