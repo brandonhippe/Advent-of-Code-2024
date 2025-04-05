@@ -3,7 +3,10 @@ name: 'Submodule Notify Parent'
 on:
   push:
     branches:
-      - main    
+      - main
+    paths-ignore:
+      - '**/README.md'
+      - '**/.tiles/**'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
